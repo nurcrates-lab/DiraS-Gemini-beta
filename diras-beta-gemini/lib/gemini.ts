@@ -45,8 +45,6 @@ export async function callGemini({
 
   if (schema) {
     generationConfig.responseMimeType = 'application/json';
-    generationConfig.responseSchema =
-      stripUnsupportedSchemaFields(schema);
   }
 
   const payload: Record<string, unknown> = {
