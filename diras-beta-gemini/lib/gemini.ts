@@ -1,3 +1,23 @@
+function stripUnsupportedSchemaFields(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(stripUnsupportedSchemaFields);
+  }
+
+  if (value && typeof value === 'object') {
+    const cleaned: Record<string, any> = {};
+
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'additionalProperties') continue;
+
+      cleaned[key] = stripUnsupportedSchemaFields(child);
+    }
+
+    return cleaned;
+  }
+
+  return value;
+}
+
 export async function callGemini({
   prompt,
   systemInstruction,
@@ -8,10 +28,16 @@ export async function callGemini({
   schema?: unknown;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
 
-  const model = process.env.GEMINI_WORKBOOK_MODEL || 'gemini-3.8-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured.');
+  }
+
+  const model =
+    process.env.GEMINI_WORKBOOK_MODEL || 'gemini-3.8-flash';
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   const generationConfig: Record<string, unknown> = {
     temperature: 0.4,
@@ -19,16 +45,24 @@ export async function callGemini({
 
   if (schema) {
     generationConfig.responseMimeType = 'application/json';
-    generationConfig.responseSchema = schema;
+    generationConfig.responseSchema =
+      stripUnsupportedSchemaFields(schema);
   }
 
   const payload: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: prompt }],
+      },
+    ],
     generationConfig,
   };
 
   if (systemInstruction) {
-    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+    payload.systemInstruction = {
+      parts: [{ text: systemInstruction }],
+    };
   }
 
   const response = await fetch(url, {
@@ -42,8 +76,12 @@ export async function callGemini({
   });
 
   const data = await response.json();
+
   if (!response.ok) {
-    throw new Error(data?.error?.message || `Gemini API error (${response.status})`);
+    throw new Error(
+      data?.error?.message ||
+      `Gemini API error (${response.status})`
+    );
   }
 
   const text = data?.candidates?.[0]?.content?.parts
